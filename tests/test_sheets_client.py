@@ -129,6 +129,24 @@ def test_get_unpaid_months_returns_only_empty_amount_rows(mock_creds, mock_gspre
 
 @patch("src.sheets_client.gspread")
 @patch("src.sheets_client.Credentials")
+def test_get_distributed_months_returns_rows_with_member(mock_creds, mock_gspread):
+    spreadsheet, _, _, _ = make_mock_spreadsheet(
+        members_rows=MEMBERS_DATA,
+        dist_rows=DIST_DATA,
+    )
+    mock_gspread.authorize.return_value.open_by_key.return_value = spreadsheet
+
+    client = SheetsClient(sheet_id="fake-id", credentials_path="fake.json")
+    results = client.get_distributed_months()
+
+    assert len(results) == 3  # 05/2025, 07/2025, 09/2026 (أمي has member but no amount)
+    assert results[0] == {"month": "05/2025", "row": 2, "member": "محمود", "amount": 440}
+    assert results[1] == {"month": "07/2025", "row": 3, "member": "خالد",  "amount": 440}
+    assert results[2]["member"] == "أمي"
+
+
+@patch("src.sheets_client.gspread")
+@patch("src.sheets_client.Credentials")
 def test_write_distribution_fills_correct_cells(mock_creds, mock_gspread):
     spreadsheet, _, _, dist_sheet = make_mock_spreadsheet(
         members_rows=MEMBERS_DATA,
@@ -143,6 +161,37 @@ def test_write_distribution_fills_correct_cells(mock_creds, mock_gspread):
     dist_sheet.update_cell.assert_any_call(5, 2, "خالد")   # المستفيد  → col B
     dist_sheet.update_cell.assert_any_call(5, 4, 440)      # المبلغ    → col D
     dist_sheet.update_cell.assert_any_call(5, 5, "حجز")   # الطريقة  → col E
+
+
+@patch("src.sheets_client.gspread")
+@patch("src.sheets_client.Credentials")
+def test_get_payment_returns_amount_and_date(mock_creds, mock_gspread):
+    spreadsheet, _, _, _ = make_mock_spreadsheet(
+        members_rows=MEMBERS_DATA,
+        payments_rows=PAYMENTS_DATA,
+    )
+    mock_gspread.authorize.return_value.open_by_key.return_value = spreadsheet
+
+    client = SheetsClient(sheet_id="fake-id", credentials_path="fake.json")
+    payment = client.get_payment("محمود", "04/2025")
+
+    assert payment["amount"] == 20
+    assert payment["date"] == "23/04/2025"
+
+
+@patch("src.sheets_client.gspread")
+@patch("src.sheets_client.Credentials")
+def test_get_paid_months_returns_only_months_with_amount(mock_creds, mock_gspread):
+    spreadsheet, _, _, _ = make_mock_spreadsheet(
+        members_rows=MEMBERS_DATA,
+        payments_rows=PAYMENTS_DATA,
+    )
+    mock_gspread.authorize.return_value.open_by_key.return_value = spreadsheet
+
+    client = SheetsClient(sheet_id="fake-id", credentials_path="fake.json")
+    months = client.get_paid_months("محمود")
+
+    assert months == ["04/2025"]
 
 
 @patch("src.sheets_client.gspread")

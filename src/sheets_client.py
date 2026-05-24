@@ -69,6 +69,30 @@ class SheetsClient:
                 return
         raise ValueError(f"لم يُعثر على صف للعضو '{member}' في الشهر '{month}'")
 
+    def get_payment(self, member: str, month: str) -> dict:
+        ws = self._worksheet(SHEET_PAYMENTS)
+        rows = ws.get_all_values()
+        h = self._header_map(rows)
+
+        for row in rows[1:]:
+            if row[h[PAY_COL_MEMBER]] == member and row[h[PAY_COL_MONTH]] == month:
+                return {
+                    "amount": int(row[h[PAY_COL_AMOUNT]]),
+                    "date": row[h[PAY_COL_DATE]],
+                }
+        raise ValueError(f"لم يُعثر على دفعة للعضو '{member}' في '{month}'")
+
+    def get_paid_months(self, member: str) -> list[str]:
+        ws = self._worksheet(SHEET_PAYMENTS)
+        rows = ws.get_all_values()
+        h = self._header_map(rows)
+
+        return [
+            row[h[PAY_COL_MONTH]]
+            for row in rows[1:]
+            if row[h[PAY_COL_MEMBER]] == member and row[h[PAY_COL_AMOUNT]]
+        ]
+
     def get_unpaid_months(self, member: str) -> list[str]:
         ws = self._worksheet(SHEET_PAYMENTS)
         rows = ws.get_all_values()
@@ -80,7 +104,23 @@ class SheetsClient:
             if row[h[PAY_COL_MEMBER]] == member and not row[h[PAY_COL_AMOUNT]]
         ]
 
-    def write_distribution(self, row: int, member: str, amount: int, method: str) -> None:
+    def get_distributed_months(self) -> list[dict]:
+        ws = self._worksheet(SHEET_DISTRIBUTIONS)
+        rows = ws.get_all_values()
+        h = self._header_map(rows)
+
+        results = []
+        for i, row in enumerate(rows[1:], start=2):
+            if row[h[DIST_COL_MEMBER]]:
+                results.append({
+                    "month": row[h[DIST_COL_MONTH]],
+                    "row": i,
+                    "member": row[h[DIST_COL_MEMBER]],
+                    "amount": int(row[h[DIST_COL_AMOUNT]]) if row[h[DIST_COL_AMOUNT]] else 0,
+                })
+        return results
+
+    def write_distribution(self, row: int, member: str, amount: int, method: str = "") -> None:
         ws = self._worksheet(SHEET_DISTRIBUTIONS)
         rows = ws.get_all_values()
         h = self._header_map(rows)

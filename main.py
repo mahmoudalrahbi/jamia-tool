@@ -7,6 +7,7 @@ from src.member_registry import MemberRegistry
 from src.flows.balance import start_balance
 from src.flows.pay import start_pay
 from src.flows.distribute import start_distribute
+from src.flows.edit import start_edit
 
 load_dotenv()
 
@@ -41,6 +42,11 @@ async def pay(interaction: discord.Interaction):
 @tree.command(name="distribute", description="سجّل توزيع الجمعية")
 async def distribute(interaction: discord.Interaction):
     await start_distribute(interaction, registry, sheets)
+
+
+@tree.command(name="edit", description="عدّل دفعة أو توزيع")
+async def edit(interaction: discord.Interaction):
+    await start_edit(interaction, registry, sheets)
 
 
 bot.run(TOKEN)
