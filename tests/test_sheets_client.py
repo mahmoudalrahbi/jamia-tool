@@ -61,6 +61,15 @@ DIST_DATA = [
 ]
 
 
+def test_col_label_returns_single_letter_for_low_indices():
+    assert SheetsClient._col_label(0) == "A"
+    assert SheetsClient._col_label(25) == "Z"
+
+
+def test_col_label_returns_double_letter_for_index_26():
+    assert SheetsClient._col_label(26) == "AA"
+
+
 @patch("src.sheets_client.gspread")
 @patch("src.sheets_client.Credentials")
 def test_get_members_returns_all_active_members(mock_creds, mock_gspread):
@@ -105,11 +114,12 @@ def test_write_payment_fills_correct_row(mock_creds, mock_gspread):
     client.write_payment(member="محمود", month="05/2025", date="21/05/2025",
                          amount=20, transfer_type="تحويل")
 
-    # Row 4 in the sheet (index 3 in data = sheet row 4)
-    # Columns: D=المبلغ المدفوع(idx 3), E=طريقة الدفع(idx 4), F=تاريخ الدفع(idx 5)
-    payments_sheet.update_cell.assert_any_call(4, 4, 20)        # amount → col D
-    payments_sheet.update_cell.assert_any_call(4, 5, "تحويل")   # type  → col E
-    payments_sheet.update_cell.assert_any_call(4, 6, "21/05/2025")  # date → col F
+    # محمود 05/2025 is sheet row 4; amount=D, type=E, date=F — three independent cells
+    payments_sheet.batch_update.assert_called_once_with([
+        {"range": "D4", "values": [[20]]},
+        {"range": "E4", "values": [["تحويل"]]},
+        {"range": "F4", "values": [["21/05/2025"]]},
+    ])
 
 
 @patch("src.sheets_client.gspread")
@@ -157,10 +167,12 @@ def test_write_distribution_fills_correct_cells(mock_creds, mock_gspread):
     client = SheetsClient(sheet_id="fake-id", credentials_path="fake.json")
     client.write_distribution(row=5, member="خالد", amount=440, method="حجز")
 
-    # DIST_HEADER = ["الشهر"(0), "المستفيد"(1), "تم الاستلام؟"(2), "المبلغ المستلم"(3), "طريقة التوزيع"(4), ...]
-    dist_sheet.update_cell.assert_any_call(5, 2, "خالد")   # المستفيد  → col B
-    dist_sheet.update_cell.assert_any_call(5, 4, 440)      # المبلغ    → col D
-    dist_sheet.update_cell.assert_any_call(5, 5, "حجز")   # الطريقة  → col E
+    # cols B (member), D (amount), E (method) — three independent single-cell entries
+    dist_sheet.batch_update.assert_called_once_with([
+        {"range": "B5", "values": [["خالد"]]},
+        {"range": "D5", "values": [[440]]},
+        {"range": "E5", "values": [["حجز"]]},
+    ])
 
 
 @patch("src.sheets_client.gspread")

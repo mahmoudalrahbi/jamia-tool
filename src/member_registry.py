@@ -15,3 +15,12 @@ class MemberRegistry:
 
     def get(self, name: str) -> dict | None:
         return next((m for m in self._members if m["name"] == name), None)
+
+    def get_unpaid_months(self, member_name: str) -> list[str]:
+        return self._client.get_unpaid_months(member_name)
+
+    def get_paid_months(self, member_name: str) -> list[str]:
+        return self._client.get_paid_months(member_name)
+
+    def get_balance(self, member_name: str) -> int:
+        return self._client.get_balance(member_name)

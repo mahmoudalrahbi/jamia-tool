@@ -1,8 +1,18 @@
 import discord
 from discord import ui
+from dataclasses import dataclass, field
 from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
 from src.flows.components import DatePickerView
+
+
+@dataclass
+class PayContext:
+    client: SheetsClient
+    registry: MemberRegistry
+    member_name: str = ""
+    month: str = ""
+    amount: int = 0
 
 
 def build_pay_confirmation(member_name: str, month: str, amount: int) -> str:
@@ -30,13 +40,10 @@ class AmountModal(ui.Modal, title="تعديل المبلغ"):
         max_length=6,
     )
 
-    def __init__(self, client: SheetsClient, member_name: str,
-                 month: str, default_amount: int):
+    def __init__(self, ctx: PayContext):
         super().__init__()
-        self._client = client
-        self._member_name = member_name
-        self._month = month
-        self.amount_input.default = str(default_amount)
+        self._ctx = ctx
+        self.amount_input.default = str(ctx.amount)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -44,83 +51,82 @@ class AmountModal(ui.Modal, title="تعديل المبلغ"):
         except ValueError:
             await interaction.response.send_message("المبلغ يجب أن يكون رقمًا.", ephemeral=True)
             return
-        view = _make_date_picker(self._client, self._member_name, self._month, amount)
-        await interaction.response.edit_message(content="اختر تاريخ الدفع:", view=view)
+        self._ctx.amount = amount
+        msg = build_pay_confirmation(self._ctx.member_name, self._ctx.month, self._ctx.amount)
+        await interaction.response.edit_message(content=msg, view=ConfirmView(self._ctx))
 
 
 class ConfirmView(ui.View):
-    def __init__(self, client: SheetsClient, member_name: str,
-                 month: str, amount: int):
+    def __init__(self, ctx: PayContext):
         super().__init__()
-        self._client = client
-        self._member_name = member_name
-        self._month = month
-        self._amount = amount
+        self._ctx = ctx
 
     @ui.button(label="تأكيد", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: ui.Button):
-        view = _make_date_picker(self._client, self._member_name, self._month, self._amount)
+        view = _make_date_picker(
+            self._ctx.client, self._ctx.member_name, self._ctx.month, self._ctx.amount
+        )
         await interaction.response.edit_message(content="اختر تاريخ الدفع:", view=view)
 
     @ui.button(label="تعديل المبلغ", style=discord.ButtonStyle.secondary)
     async def edit_amount(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_modal(
-            AmountModal(self._client, self._member_name, self._month, self._amount)
-        )
+        await interaction.response.send_modal(AmountModal(self._ctx))
 
 
 class MonthSelect(ui.Select):
-    def __init__(self, client: SheetsClient, member_name: str,
-                 amount: int, months: list[str]):
-        self._client = client
-        self._member_name = member_name
-        self._amount = amount
+    def __init__(self, ctx: PayContext, months: list[str]):
+        self._ctx = ctx
         options = [discord.SelectOption(label=m) for m in months]
         super().__init__(placeholder="اختر الشهر...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        month = self.values[0]
-        msg = build_pay_confirmation(self._member_name, month, self._amount)
-        view = ConfirmView(self._client, self._member_name, month, self._amount)
+        self._ctx.month = self.values[0]
+        msg = build_pay_confirmation(self._ctx.member_name, self._ctx.month, self._ctx.amount)
+        view = ConfirmView(self._ctx)
         await interaction.response.edit_message(content=msg, view=view)
 
 
 class MonthView(ui.View):
-    def __init__(self, client: SheetsClient, member_name: str,
-                 amount: int, months: list[str]):
+    def __init__(self, ctx: PayContext, months: list[str]):
         super().__init__()
-        self.add_item(MonthSelect(client, member_name, amount, months))
+        self.add_item(MonthSelect(ctx, months))
 
 
 class MemberSelect(ui.Select):
-    def __init__(self, registry: MemberRegistry, client: SheetsClient):
-        self._registry = registry
-        self._client = client
-        options = [discord.SelectOption(label=m["name"]) for m in registry.all()]
+    def __init__(self, ctx: PayContext):
+        self._ctx = ctx
+        options = [discord.SelectOption(label=m["name"]) for m in ctx.registry.all()]
         super().__init__(placeholder="اختر العضو...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        member_name = self.values[0]
-        member = self._registry.get(member_name)
-        months = self._client.get_unpaid_months(member_name)
+        self._ctx.member_name = self.values[0]
+        member = self._ctx.registry.get(self._ctx.member_name)
+        if member is None:
+            await interaction.response.edit_message(
+                content="عذراً، لم يُعثر على بيانات العضو. الرجاء المحاولة مجدداً.", view=None
+            )
+            return
+        months = self._ctx.registry.get_unpaid_months(self._ctx.member_name)
 
         if not months:
             await interaction.response.edit_message(
-                content=f"لا توجد شهور غير مدفوعة لـ **{member_name}**", view=None
+                content=f"لا توجد شهور غير مدفوعة لـ **{self._ctx.member_name}**", view=None
             )
             return
 
-        view = MonthView(self._client, member_name, member["monthly_amount"], months)
+        self._ctx.amount = member["monthly_amount"]
+        view = MonthView(self._ctx, months)
         await interaction.response.edit_message(content="اختر الشهر:", view=view)
 
 
 class PayView(ui.View):
-    def __init__(self, registry: MemberRegistry, client: SheetsClient):
+    def __init__(self, ctx: PayContext):
         super().__init__()
-        self.add_item(MemberSelect(registry, client))
+        self.add_item(MemberSelect(ctx))
 
 
 async def start_pay(interaction: discord.Interaction,
                     registry: MemberRegistry, client: SheetsClient):
-    view = PayView(registry, client)
+    ctx = PayContext(client=client, registry=registry)
+    view = PayView(ctx)
     await interaction.response.send_message("اختر العضو:", view=view, ephemeral=True)

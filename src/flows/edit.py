@@ -1,8 +1,29 @@
 import discord
 from discord import ui
+from dataclasses import dataclass
 from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
 from src.flows.components import DatePickerView
+
+
+@dataclass
+class EditPaymentContext:
+    client: SheetsClient
+    registry: MemberRegistry
+    member_name: str = ""
+    month: str = ""
+    current_amount: int = 0
+    current_date: str = ""
+
+
+@dataclass
+class EditDistributionContext:
+    client: SheetsClient
+    dist_row: int = 0
+    month: str = ""
+    current_member: str = ""
+    current_amount: int = 0
+    current_method: str = ""
 
 
 # ── Edit Payment ──────────────────────────────────────────────────────────────
@@ -19,13 +40,10 @@ def _make_payment_date_picker(client: SheetsClient, member_name: str,
 class EditPaymentAmountModal(ui.Modal, title="تعديل المبلغ"):
     amount_input: ui.TextInput = ui.TextInput(label="المبلغ", max_length=6)
 
-    def __init__(self, client: SheetsClient, member_name: str,
-                 month: str, current_amount: int):
+    def __init__(self, ctx: EditPaymentContext):
         super().__init__()
-        self._client = client
-        self._member_name = member_name
-        self._month = month
-        self.amount_input.default = str(current_amount)
+        self._ctx = ctx
+        self.amount_input.default = str(ctx.current_amount)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -33,55 +51,54 @@ class EditPaymentAmountModal(ui.Modal, title="تعديل المبلغ"):
         except ValueError:
             await interaction.response.send_message("المبلغ يجب أن يكون رقمًا.", ephemeral=True)
             return
-        view = _make_payment_date_picker(self._client, self._member_name, self._month, amount)
+        view = _make_payment_date_picker(
+            self._ctx.client, self._ctx.member_name, self._ctx.month, amount
+        )
         await interaction.response.edit_message(content="اختر تاريخ الدفع:", view=view)
 
 
 class EditPaymentMonthSelect(ui.Select):
-    def __init__(self, client: SheetsClient, member_name: str, months: list[str]):
-        self._client = client
-        self._member_name = member_name
+    def __init__(self, ctx: EditPaymentContext, months: list[str]):
+        self._ctx = ctx
         options = [discord.SelectOption(label=m) for m in months]
         super().__init__(placeholder="اختر الشهر...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        month = self.values[0]
-        payment = self._client.get_payment(self._member_name, month)
-        modal = EditPaymentAmountModal(
-            self._client, self._member_name, month, payment["amount"]
-        )
-        await interaction.response.send_modal(modal)
+        self._ctx.month = self.values[0]
+        payment = self._ctx.client.get_payment(self._ctx.member_name, self._ctx.month)
+        self._ctx.current_amount = payment["amount"]
+        self._ctx.current_date = payment["date"]
+        await interaction.response.send_modal(EditPaymentAmountModal(self._ctx))
 
 
 class EditPaymentMonthView(ui.View):
-    def __init__(self, client: SheetsClient, member_name: str, months: list[str]):
+    def __init__(self, ctx: EditPaymentContext, months: list[str]):
         super().__init__()
-        self.add_item(EditPaymentMonthSelect(client, member_name, months))
+        self.add_item(EditPaymentMonthSelect(ctx, months))
 
 
 class EditPaymentMemberSelect(ui.Select):
-    def __init__(self, registry: MemberRegistry, client: SheetsClient):
-        self._registry = registry
-        self._client = client
-        options = [discord.SelectOption(label=m["name"]) for m in registry.all()]
+    def __init__(self, ctx: EditPaymentContext):
+        self._ctx = ctx
+        options = [discord.SelectOption(label=m["name"]) for m in ctx.registry.all()]
         super().__init__(placeholder="اختر العضو...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        member_name = self.values[0]
-        months = self._client.get_paid_months(member_name)
+        self._ctx.member_name = self.values[0]
+        months = self._ctx.registry.get_paid_months(self._ctx.member_name)
         if not months:
             await interaction.response.edit_message(
-                content=f"لا توجد دفعات مسجلة لـ **{member_name}**", view=None
+                content=f"لا توجد دفعات مسجلة لـ **{self._ctx.member_name}**", view=None
             )
             return
-        view = EditPaymentMonthView(self._client, member_name, months)
+        view = EditPaymentMonthView(self._ctx, months)
         await interaction.response.edit_message(content="اختر الشهر:", view=view)
 
 
 class EditPaymentMemberView(ui.View):
-    def __init__(self, registry: MemberRegistry, client: SheetsClient):
+    def __init__(self, ctx: EditPaymentContext):
         super().__init__()
-        self.add_item(EditPaymentMemberSelect(registry, client))
+        self.add_item(EditPaymentMemberSelect(ctx))
 
 
 # ── Edit Distribution ─────────────────────────────────────────────────────────
@@ -90,14 +107,11 @@ class EditDistributionModal(ui.Modal, title="تعديل التوزيع"):
     member_input: ui.TextInput = ui.TextInput(label="المستفيد", max_length=50)
     amount_input: ui.TextInput = ui.TextInput(label="المبلغ", max_length=6)
 
-    def __init__(self, client: SheetsClient, dist_row: int, month: str,
-                 current_member: str, current_amount: int):
+    def __init__(self, ctx: EditDistributionContext):
         super().__init__()
-        self._client = client
-        self._dist_row = dist_row
-        self._month = month
-        self.member_input.default = current_member
-        self.amount_input.default = str(current_amount) if current_amount else ""
+        self._ctx = ctx
+        self.member_input.default = ctx.current_member
+        self.amount_input.default = str(ctx.current_amount)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -105,34 +119,37 @@ class EditDistributionModal(ui.Modal, title="تعديل التوزيع"):
         except ValueError:
             await interaction.response.send_message("المبلغ يجب أن يكون رقمًا.", ephemeral=True)
             return
-        self._client.write_distribution(
-            row=self._dist_row,
+        self._ctx.client.write_distribution(
+            row=self._ctx.dist_row,
             member=self.member_input.value,
             amount=amount,
+            method=self._ctx.current_method,
         )
-        msg = f"✅ تم تعديل توزيع {self._month} — {self.member_input.value} — {amount} ريال"
+        msg = f"✅ تم تعديل توزيع {self._ctx.month} — {self.member_input.value} — {amount} ريال"
         await interaction.response.edit_message(content=msg, view=None)
 
 
 class EditDistributionMonthSelect(ui.Select):
-    def __init__(self, client: SheetsClient, dist_months: list[dict]):
-        self._client = client
+    def __init__(self, ctx: EditDistributionContext, dist_months: list[dict]):
+        self._ctx = ctx
         self._dist_months = {d["month"]: d for d in dist_months}
         options = [discord.SelectOption(label=d["month"]) for d in dist_months]
         super().__init__(placeholder="اختر الشهر...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
         d = self._dist_months[self.values[0]]
-        modal = EditDistributionModal(
-            self._client, d["row"], d["month"], d["member"], d["amount"]
-        )
-        await interaction.response.send_modal(modal)
+        self._ctx.dist_row = d["row"]
+        self._ctx.month = d["month"]
+        self._ctx.current_member = d["member"]
+        self._ctx.current_amount = d["amount"]
+        self._ctx.current_method = d.get("method", "")
+        await interaction.response.send_modal(EditDistributionModal(self._ctx))
 
 
 class EditDistributionMonthView(ui.View):
-    def __init__(self, client: SheetsClient, dist_months: list[dict]):
+    def __init__(self, ctx: EditDistributionContext, dist_months: list[dict]):
         super().__init__()
-        self.add_item(EditDistributionMonthSelect(client, dist_months))
+        self.add_item(EditDistributionMonthSelect(ctx, dist_months))
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
@@ -145,7 +162,8 @@ class EditTypeView(ui.View):
 
     @ui.button(label="تعديل دفعة", style=discord.ButtonStyle.primary)
     async def edit_payment(self, interaction: discord.Interaction, button: ui.Button):
-        view = EditPaymentMemberView(self._registry, self._client)
+        ctx = EditPaymentContext(client=self._client, registry=self._registry)
+        view = EditPaymentMemberView(ctx)
         await interaction.response.edit_message(content="اختر العضو:", view=view)
 
     @ui.button(label="تعديل توزيع", style=discord.ButtonStyle.secondary)
@@ -156,7 +174,8 @@ class EditTypeView(ui.View):
                 content="لا توجد توزيعات مسجلة بعد.", view=None
             )
             return
-        view = EditDistributionMonthView(self._client, dist_months)
+        ctx = EditDistributionContext(client=self._client)
+        view = EditDistributionMonthView(ctx, dist_months)
         await interaction.response.edit_message(content="اختر الشهر:", view=view)
 
 

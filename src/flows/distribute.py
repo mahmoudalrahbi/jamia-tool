@@ -1,9 +1,20 @@
 import discord
 from discord import ui
+from dataclasses import dataclass
 from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
 
 DISTRIBUTION_METHODS = ["حجز", "قرعة"]
+
+
+@dataclass
+class DistributeContext:
+    client: SheetsClient
+    registry: MemberRegistry
+    dist_row: int = 0
+    month: str = ""
+    member_name: str = ""
+    amount: int = 0
 
 
 def build_distribute_confirmation(month: str, member_name: str, amount: int) -> str:
@@ -11,33 +22,27 @@ def build_distribute_confirmation(month: str, member_name: str, amount: int) -> 
 
 
 class MethodSelect(ui.Select):
-    def __init__(self, client: SheetsClient, dist_row: int,
-                 month: str, member_name: str, amount: int):
-        self._client = client
-        self._dist_row = dist_row
-        self._month = month
-        self._member_name = member_name
-        self._amount = amount
+    def __init__(self, ctx: DistributeContext):
+        self._ctx = ctx
         options = [discord.SelectOption(label=m) for m in DISTRIBUTION_METHODS]
         super().__init__(placeholder="اختر طريقة التوزيع...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
         method = self.values[0]
-        self._client.write_distribution(
-            row=self._dist_row,
-            member=self._member_name,
-            amount=self._amount,
+        self._ctx.client.write_distribution(
+            row=self._ctx.dist_row,
+            member=self._ctx.member_name,
+            amount=self._ctx.amount,
             method=method,
         )
-        msg = f"✅ تم تسجيل التوزيع — {self._month} — {self._member_name} — {self._amount} ريال — {method}"
+        msg = f"✅ تم تسجيل التوزيع — {self._ctx.month} — {self._ctx.member_name} — {self._ctx.amount} ريال — {method}"
         await interaction.response.edit_message(content=msg, view=None)
 
 
 class MethodView(ui.View):
-    def __init__(self, client: SheetsClient, dist_row: int,
-                 month: str, member_name: str, amount: int):
+    def __init__(self, ctx: DistributeContext):
         super().__init__()
-        self.add_item(MethodSelect(client, dist_row, month, member_name, amount))
+        self.add_item(MethodSelect(ctx))
 
 
 class AmountModal(ui.Modal, title="المبلغ المستلم"):
@@ -47,13 +52,9 @@ class AmountModal(ui.Modal, title="المبلغ المستلم"):
         max_length=6,
     )
 
-    def __init__(self, client: SheetsClient, dist_row: int,
-                 month: str, member_name: str):
+    def __init__(self, ctx: DistributeContext):
         super().__init__()
-        self._client = client
-        self._dist_row = dist_row
-        self._month = month
-        self._member_name = member_name
+        self._ctx = ctx
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -61,38 +62,36 @@ class AmountModal(ui.Modal, title="المبلغ المستلم"):
         except ValueError:
             await interaction.response.send_message("المبلغ يجب أن يكون رقمًا.", ephemeral=True)
             return
-        msg = build_distribute_confirmation(self._month, self._member_name, amount)
-        view = MethodView(self._client, self._dist_row, self._month, self._member_name, amount)
+        self._ctx.amount = amount
+        msg = build_distribute_confirmation(self._ctx.month, self._ctx.member_name, self._ctx.amount)
+        view = MethodView(self._ctx)
         await interaction.response.edit_message(content=msg, view=view)
 
 
 class MemberSelect(ui.Select):
-    def __init__(self, registry: MemberRegistry, client: SheetsClient,
-                 dist_row: int, month: str):
-        self._registry = registry
-        self._client = client
-        self._dist_row = dist_row
-        self._month = month
-        options = [discord.SelectOption(label=m["name"]) for m in registry.all()]
+    def __init__(self, ctx: DistributeContext):
+        self._ctx = ctx
+        options = [discord.SelectOption(label=m["name"]) for m in ctx.registry.all()]
         super().__init__(placeholder="اختر المستفيد...", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        member_name = self.values[0]
-        modal = AmountModal(self._client, self._dist_row, self._month, member_name)
+        self._ctx.member_name = self.values[0]
+        modal = AmountModal(self._ctx)
         await interaction.response.send_modal(modal)
 
 
 class DistributeView(ui.View):
-    def __init__(self, registry: MemberRegistry, client: SheetsClient,
-                 dist_row: int, month: str):
+    def __init__(self, ctx: DistributeContext):
         super().__init__()
-        self.add_item(MemberSelect(registry, client, dist_row, month))
+        self.add_item(MemberSelect(ctx))
 
 
 async def start_distribute(interaction: discord.Interaction,
                            registry: MemberRegistry, client: SheetsClient):
     dist = client.get_next_distribution()
-    view = DistributeView(registry, client, dist["row"], dist["month"])
+    ctx = DistributeContext(client=client, registry=registry,
+                            dist_row=dist["row"], month=dist["month"])
+    view = DistributeView(ctx)
     await interaction.response.send_message(
         f"الشهر القادم للتوزيع: **{dist['month']}**\nاختر المستفيد:",
         view=view,

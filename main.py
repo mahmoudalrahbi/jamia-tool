@@ -31,7 +31,7 @@ async def on_ready():
 
 @tree.command(name="balance", description="استعلم عن رصيد عضو")
 async def balance(interaction: discord.Interaction):
-    await start_balance(interaction, registry, sheets)
+    await start_balance(interaction, registry)
 
 
 @tree.command(name="pay", description="سجّل دفعة لعضو")

@@ -34,6 +34,14 @@ class SheetsClient:
     def _worksheet(self, name: str):
         return self._sheet.worksheet(name)
 
+    @staticmethod
+    def _col_label(col_index: int) -> str:
+        label, n = "", col_index + 1
+        while n > 0:
+            n, r = divmod(n - 1, 26)
+            label = chr(65 + r) + label
+        return label
+
     def _header_map(self, rows: list) -> dict:
         return {col: idx for idx, col in enumerate(rows[0])}
 
@@ -62,10 +70,14 @@ class SheetsClient:
 
         for i, row in enumerate(rows[1:], start=2):
             if row[h[PAY_COL_MEMBER]] == member and row[h[PAY_COL_MONTH]] == month:
-                sheet_row = i
-                ws.update_cell(sheet_row, h[PAY_COL_AMOUNT] + 1, amount)
-                ws.update_cell(sheet_row, h[PAY_COL_TYPE] + 1, transfer_type)
-                ws.update_cell(sheet_row, h[PAY_COL_DATE] + 1, date)
+                ac = self._col_label(h[PAY_COL_AMOUNT])
+                tc = self._col_label(h[PAY_COL_TYPE])
+                dc = self._col_label(h[PAY_COL_DATE])
+                ws.batch_update([
+                    {"range": f"{ac}{i}", "values": [[amount]]},
+                    {"range": f"{tc}{i}", "values": [[transfer_type]]},
+                    {"range": f"{dc}{i}", "values": [[date]]},
+                ])
                 return
         raise ValueError(f"لم يُعثر على صف للعضو '{member}' في الشهر '{month}'")
 
@@ -125,9 +137,14 @@ class SheetsClient:
         rows = ws.get_all_values()
         h = self._header_map(rows)
 
-        ws.update_cell(row, h[DIST_COL_MEMBER] + 1, member)
-        ws.update_cell(row, h[DIST_COL_AMOUNT] + 1, amount)
-        ws.update_cell(row, h[DIST_COL_METHOD] + 1, method)
+        mc = self._col_label(h[DIST_COL_MEMBER])
+        ac = self._col_label(h[DIST_COL_AMOUNT])
+        tc = self._col_label(h[DIST_COL_METHOD])
+        ws.batch_update([
+            {"range": f"{mc}{row}", "values": [[member]]},
+            {"range": f"{ac}{row}", "values": [[amount]]},
+            {"range": f"{tc}{row}", "values": [[method]]},
+        ])
 
     def get_next_distribution(self) -> dict:
         ws = self._worksheet(SHEET_DISTRIBUTIONS)
