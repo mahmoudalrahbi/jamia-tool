@@ -1,8 +1,8 @@
 import discord
 from discord import ui
-from datetime import date as _date
 from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
+from src.flows.components import DatePickerView
 
 
 def build_pay_confirmation(member_name: str, month: str, amount: int) -> str:
@@ -16,31 +16,11 @@ async def execute_payment(interaction: discord.Interaction, client: SheetsClient
     await interaction.response.edit_message(content=msg, view=None)
 
 
-class DateModal(ui.Modal, title="تأكيد التاريخ"):
-    date_input: ui.TextInput = ui.TextInput(
-        label="تاريخ الدفع",
-        placeholder="مثال: 21/05/2025",
-        max_length=10,
-    )
-
-    def __init__(self, client: SheetsClient, member_name: str,
-                 month: str, amount: int):
-        super().__init__()
-        self._client = client
-        self._member_name = member_name
-        self._month = month
-        self._amount = amount
-        self.date_input.default = _date.today().strftime("%d/%m/%Y")
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await execute_payment(
-            interaction=interaction,
-            client=self._client,
-            member_name=self._member_name,
-            month=self._month,
-            date=self.date_input.value,
-            amount=self._amount,
-        )
+def _make_date_picker(client: SheetsClient, member_name: str,
+                      month: str, amount: int) -> DatePickerView:
+    async def on_date(interaction: discord.Interaction, date: str):
+        await execute_payment(interaction, client, member_name, month, date, amount)
+    return DatePickerView(on_date)
 
 
 class AmountModal(ui.Modal, title="تعديل المبلغ"):
@@ -50,7 +30,8 @@ class AmountModal(ui.Modal, title="تعديل المبلغ"):
         max_length=6,
     )
 
-    def __init__(self, client: SheetsClient, member_name: str, month: str, default_amount: int):
+    def __init__(self, client: SheetsClient, member_name: str,
+                 month: str, default_amount: int):
         super().__init__()
         self._client = client
         self._member_name = member_name
@@ -63,9 +44,8 @@ class AmountModal(ui.Modal, title="تعديل المبلغ"):
         except ValueError:
             await interaction.response.send_message("المبلغ يجب أن يكون رقمًا.", ephemeral=True)
             return
-        await interaction.response.send_modal(
-            DateModal(self._client, self._member_name, self._month, amount)
-        )
+        view = _make_date_picker(self._client, self._member_name, self._month, amount)
+        await interaction.response.edit_message(content="اختر تاريخ الدفع:", view=view)
 
 
 class ConfirmView(ui.View):
@@ -79,9 +59,8 @@ class ConfirmView(ui.View):
 
     @ui.button(label="تأكيد", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_modal(
-            DateModal(self._client, self._member_name, self._month, self._amount)
-        )
+        view = _make_date_picker(self._client, self._member_name, self._month, self._amount)
+        await interaction.response.edit_message(content="اختر تاريخ الدفع:", view=view)
 
     @ui.button(label="تعديل المبلغ", style=discord.ButtonStyle.secondary)
     async def edit_amount(self, interaction: discord.Interaction, button: ui.Button):

@@ -2,22 +2,30 @@ import discord
 from discord import ui
 from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
+from src.flows.components import DatePickerView
 
 
 # ── Edit Payment ──────────────────────────────────────────────────────────────
 
-class EditPaymentModal(ui.Modal, title="تعديل الدفعة"):
-    amount_input: ui.TextInput = ui.TextInput(label="المبلغ", max_length=6)
-    date_input: ui.TextInput = ui.TextInput(label="تاريخ الدفع", placeholder="مثال: 21/05/2025", max_length=10)
+def _make_payment_date_picker(client: SheetsClient, member_name: str,
+                               month: str, amount: int) -> DatePickerView:
+    async def on_date(interaction: discord.Interaction, date: str):
+        client.write_payment(member=member_name, month=month, date=date, amount=amount)
+        msg = f"✅ تم تعديل دفعة **{member_name}** — {month} — {amount} ريال"
+        await interaction.response.edit_message(content=msg, view=None)
+    return DatePickerView(on_date)
 
-    def __init__(self, client: SheetsClient, member_name: str, month: str,
-                 current_amount: int, current_date: str):
+
+class EditPaymentAmountModal(ui.Modal, title="تعديل المبلغ"):
+    amount_input: ui.TextInput = ui.TextInput(label="المبلغ", max_length=6)
+
+    def __init__(self, client: SheetsClient, member_name: str,
+                 month: str, current_amount: int):
         super().__init__()
         self._client = client
         self._member_name = member_name
         self._month = month
         self.amount_input.default = str(current_amount)
-        self.date_input.default = current_date
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -25,14 +33,8 @@ class EditPaymentModal(ui.Modal, title="تعديل الدفعة"):
         except ValueError:
             await interaction.response.send_message("المبلغ يجب أن يكون رقمًا.", ephemeral=True)
             return
-        self._client.write_payment(
-            member=self._member_name,
-            month=self._month,
-            date=self.date_input.value,
-            amount=amount,
-        )
-        msg = f"✅ تم تعديل دفعة **{self._member_name}** — {self._month} — {amount} ريال"
-        await interaction.response.edit_message(content=msg, view=None)
+        view = _make_payment_date_picker(self._client, self._member_name, self._month, amount)
+        await interaction.response.edit_message(content="اختر تاريخ الدفع:", view=view)
 
 
 class EditPaymentMonthSelect(ui.Select):
@@ -45,9 +47,8 @@ class EditPaymentMonthSelect(ui.Select):
     async def callback(self, interaction: discord.Interaction):
         month = self.values[0]
         payment = self._client.get_payment(self._member_name, month)
-        modal = EditPaymentModal(
-            self._client, self._member_name, month,
-            payment["amount"], payment["date"],
+        modal = EditPaymentAmountModal(
+            self._client, self._member_name, month, payment["amount"]
         )
         await interaction.response.send_modal(modal)
 
