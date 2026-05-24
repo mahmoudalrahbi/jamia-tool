@@ -30,9 +30,18 @@ class SheetsClient:
         creds = Credentials.from_service_account_file(credentials_path, scopes=SCOPES)
         self._gc = gspread.authorize(creds)
         self._sheet = self._gc.open_by_key(sheet_id)
+        self._cache: dict[str, list] = {}
 
     def _worksheet(self, name: str):
         return self._sheet.worksheet(name)
+
+    def _read(self, sheet_name: str) -> list:
+        if sheet_name not in self._cache:
+            self._cache[sheet_name] = self._worksheet(sheet_name).get_all_values()
+        return self._cache[sheet_name]
+
+    def _invalidate(self, sheet_name: str) -> None:
+        self._cache.pop(sheet_name, None)
 
     @staticmethod
     def _col_label(col_index: int) -> str:
@@ -46,8 +55,7 @@ class SheetsClient:
         return {col: idx for idx, col in enumerate(rows[0])}
 
     def get_members(self) -> list[dict]:
-        ws = self._worksheet(SHEET_MEMBERS)
-        rows = ws.get_all_values()
+        rows = self._read(SHEET_MEMBERS)
         headers = self._header_map(rows)
 
         members = []
@@ -65,7 +73,7 @@ class SheetsClient:
     def write_payment(self, member: str, month: str, date: str,
                       amount: int, transfer_type: str = "تحويل") -> None:
         ws = self._worksheet(SHEET_PAYMENTS)
-        rows = ws.get_all_values()
+        rows = self._read(SHEET_PAYMENTS)
         h = self._header_map(rows)
 
         for i, row in enumerate(rows[1:], start=2):
@@ -78,12 +86,12 @@ class SheetsClient:
                     {"range": f"{tc}{i}", "values": [[transfer_type]]},
                     {"range": f"{dc}{i}", "values": [[date]]},
                 ])
+                self._invalidate(SHEET_PAYMENTS)
                 return
         raise ValueError(f"لم يُعثر على صف للعضو '{member}' في الشهر '{month}'")
 
     def get_payment(self, member: str, month: str) -> dict:
-        ws = self._worksheet(SHEET_PAYMENTS)
-        rows = ws.get_all_values()
+        rows = self._read(SHEET_PAYMENTS)
         h = self._header_map(rows)
 
         for row in rows[1:]:
@@ -95,8 +103,7 @@ class SheetsClient:
         raise ValueError(f"لم يُعثر على دفعة للعضو '{member}' في '{month}'")
 
     def get_paid_months(self, member: str) -> list[str]:
-        ws = self._worksheet(SHEET_PAYMENTS)
-        rows = ws.get_all_values()
+        rows = self._read(SHEET_PAYMENTS)
         h = self._header_map(rows)
 
         return [
@@ -106,8 +113,7 @@ class SheetsClient:
         ]
 
     def get_unpaid_months(self, member: str) -> list[str]:
-        ws = self._worksheet(SHEET_PAYMENTS)
-        rows = ws.get_all_values()
+        rows = self._read(SHEET_PAYMENTS)
         h = self._header_map(rows)
 
         return [
@@ -117,8 +123,7 @@ class SheetsClient:
         ]
 
     def get_distributed_months(self) -> list[dict]:
-        ws = self._worksheet(SHEET_DISTRIBUTIONS)
-        rows = ws.get_all_values()
+        rows = self._read(SHEET_DISTRIBUTIONS)
         h = self._header_map(rows)
 
         results = []
@@ -134,7 +139,7 @@ class SheetsClient:
 
     def write_distribution(self, row: int, member: str, amount: int, method: str = "") -> None:
         ws = self._worksheet(SHEET_DISTRIBUTIONS)
-        rows = ws.get_all_values()
+        rows = self._read(SHEET_DISTRIBUTIONS)
         h = self._header_map(rows)
 
         mc = self._col_label(h[DIST_COL_MEMBER])
@@ -145,10 +150,10 @@ class SheetsClient:
             {"range": f"{ac}{row}", "values": [[amount]]},
             {"range": f"{tc}{row}", "values": [[method]]},
         ])
+        self._invalidate(SHEET_DISTRIBUTIONS)
 
     def get_next_distribution(self) -> dict:
-        ws = self._worksheet(SHEET_DISTRIBUTIONS)
-        rows = ws.get_all_values()
+        rows = self._read(SHEET_DISTRIBUTIONS)
         h = self._header_map(rows)
 
         for i, row in enumerate(rows[1:], start=2):
@@ -157,8 +162,7 @@ class SheetsClient:
         raise ValueError("لا توجد شهور توزيع متاحة")
 
     def get_balance(self, member: str) -> int:
-        ws = self._worksheet(SHEET_MEMBERS)
-        rows = ws.get_all_values()
+        rows = self._read(SHEET_MEMBERS)
         h = self._header_map(rows)
 
         for row in rows[1:]:

@@ -3,7 +3,10 @@ from discord import ui
 from dataclasses import dataclass
 from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
-from src.flows.components import DatePickerView
+from src.flows.components import DatePickerView, TimeoutView
+
+
+PAYMENT_METHODS = ["تحويل", "كاش"]
 
 
 @dataclass
@@ -14,6 +17,7 @@ class EditPaymentContext:
     month: str = ""
     current_amount: int = 0
     current_date: str = ""
+    new_amount: int = 0
 
 
 @dataclass
@@ -51,10 +55,34 @@ class EditPaymentAmountModal(ui.Modal, title="تعديل المبلغ"):
         except ValueError:
             await interaction.response.send_message("المبلغ يجب أن يكون رقمًا.", ephemeral=True)
             return
-        view = _make_payment_date_picker(
-            self._ctx.client, self._ctx.member_name, self._ctx.month, amount
+        self._ctx.new_amount = amount
+        view = EditPaymentMethodView(self._ctx)
+        await interaction.response.edit_message(content="اختر طريقة الدفع:", view=view)
+
+
+class EditPaymentMethodSelect(ui.Select):
+    def __init__(self, ctx: EditPaymentContext):
+        self._ctx = ctx
+        options = [discord.SelectOption(label=m) for m in PAYMENT_METHODS]
+        super().__init__(placeholder="اختر طريقة الدفع...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        method = self.values[0]
+        self._ctx.client.write_payment(
+            member=self._ctx.member_name,
+            month=self._ctx.month,
+            date=self._ctx.current_date,
+            amount=self._ctx.new_amount,
+            transfer_type=method,
         )
-        await interaction.response.edit_message(content="اختر تاريخ الدفع:", view=view)
+        msg = f"✅ تم تعديل دفعة **{self._ctx.member_name}** — {self._ctx.month} — {self._ctx.new_amount} ريال — {method}"
+        await interaction.response.edit_message(content=msg, view=None)
+
+
+class EditPaymentMethodView(TimeoutView):
+    def __init__(self, ctx: EditPaymentContext):
+        super().__init__()
+        self.add_item(EditPaymentMethodSelect(ctx))
 
 
 class EditPaymentMonthSelect(ui.Select):
@@ -71,7 +99,7 @@ class EditPaymentMonthSelect(ui.Select):
         await interaction.response.send_modal(EditPaymentAmountModal(self._ctx))
 
 
-class EditPaymentMonthView(ui.View):
+class EditPaymentMonthView(TimeoutView):
     def __init__(self, ctx: EditPaymentContext, months: list[str]):
         super().__init__()
         self.add_item(EditPaymentMonthSelect(ctx, months))
@@ -95,7 +123,7 @@ class EditPaymentMemberSelect(ui.Select):
         await interaction.response.edit_message(content="اختر الشهر:", view=view)
 
 
-class EditPaymentMemberView(ui.View):
+class EditPaymentMemberView(TimeoutView):
     def __init__(self, ctx: EditPaymentContext):
         super().__init__()
         self.add_item(EditPaymentMemberSelect(ctx))
@@ -146,7 +174,7 @@ class EditDistributionMonthSelect(ui.Select):
         await interaction.response.send_modal(EditDistributionModal(self._ctx))
 
 
-class EditDistributionMonthView(ui.View):
+class EditDistributionMonthView(TimeoutView):
     def __init__(self, ctx: EditDistributionContext, dist_months: list[dict]):
         super().__init__()
         self.add_item(EditDistributionMonthSelect(ctx, dist_months))
@@ -154,7 +182,7 @@ class EditDistributionMonthView(ui.View):
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
 
-class EditTypeView(ui.View):
+class EditTypeView(TimeoutView):
     def __init__(self, registry: MemberRegistry, client: SheetsClient):
         super().__init__()
         self._registry = registry

@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from src.flows.pay import build_pay_confirmation, execute_payment, PayContext, MemberSelect, MonthSelect, MonthView, ConfirmView, AmountModal
+from src.flows.pay import build_pay_confirmation, execute_payment, PayContext, MemberSelect, MonthSelect, MonthView, ConfirmView, AmountModal, DuplicatePaymentView
 
 
 def test_pay_confirmation_includes_member_month_and_amount():
@@ -130,3 +130,40 @@ async def test_member_select_shows_month_picker_when_member_has_unpaid_months():
     kwargs = interaction.response.edit_message.call_args.kwargs
     assert kwargs["content"] == "اختر الشهر:"
     assert isinstance(kwargs["view"], MonthView)
+
+
+@pytest.mark.asyncio
+async def test_confirm_view_shows_duplicate_warning_when_month_already_paid():
+    ctx = make_pay_context()
+    ctx.member_name = "محمود"
+    ctx.month = "04/2025"
+    ctx.amount = 20
+    ctx.client.get_paid_months.return_value = ["04/2025"]
+
+    view = ConfirmView(ctx)
+    interaction = MagicMock()
+    interaction.response.edit_message = AsyncMock()
+
+    await view.confirm.callback(interaction)
+
+    kwargs = interaction.response.edit_message.call_args.kwargs
+    assert "مسجلة مسبقاً" in kwargs["content"]
+    assert isinstance(kwargs["view"], DuplicatePaymentView)
+
+
+@pytest.mark.asyncio
+async def test_confirm_view_proceeds_directly_when_month_not_yet_paid():
+    ctx = make_pay_context()
+    ctx.member_name = "محمود"
+    ctx.month = "05/2025"
+    ctx.amount = 20
+    ctx.client.get_paid_months.return_value = []
+
+    view = ConfirmView(ctx)
+    interaction = MagicMock()
+    interaction.response.edit_message = AsyncMock()
+
+    await view.confirm.callback(interaction)
+
+    kwargs = interaction.response.edit_message.call_args.kwargs
+    assert "اختر تاريخ" in kwargs["content"]

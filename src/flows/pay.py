@@ -3,7 +3,7 @@ from discord import ui
 from dataclasses import dataclass, field
 from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
-from src.flows.components import DatePickerView
+from src.flows.components import DatePickerView, TimeoutView
 
 
 @dataclass
@@ -56,13 +56,35 @@ class AmountModal(ui.Modal, title="تعديل المبلغ"):
         await interaction.response.edit_message(content=msg, view=ConfirmView(self._ctx))
 
 
-class ConfirmView(ui.View):
+class DuplicatePaymentView(TimeoutView):
+    def __init__(self, ctx: PayContext):
+        super().__init__()
+        self._ctx = ctx
+
+    @ui.button(label="نعم، استبدل", style=discord.ButtonStyle.danger)
+    async def overwrite(self, interaction: discord.Interaction, button: ui.Button):
+        view = _make_date_picker(
+            self._ctx.client, self._ctx.member_name, self._ctx.month, self._ctx.amount
+        )
+        await interaction.response.edit_message(content="اختر تاريخ الدفع:", view=view)
+
+    @ui.button(label="إلغاء", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.response.edit_message(content="تم الإلغاء.", view=None)
+
+
+class ConfirmView(TimeoutView):
     def __init__(self, ctx: PayContext):
         super().__init__()
         self._ctx = ctx
 
     @ui.button(label="تأكيد", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: ui.Button):
+        paid = self._ctx.client.get_paid_months(self._ctx.member_name)
+        if self._ctx.month in paid:
+            msg = f"هذه الدفعة مسجلة مسبقاً لـ **{self._ctx.member_name}** — {self._ctx.month}. هل تريد استبدالها؟"
+            await interaction.response.edit_message(content=msg, view=DuplicatePaymentView(self._ctx))
+            return
         view = _make_date_picker(
             self._ctx.client, self._ctx.member_name, self._ctx.month, self._ctx.amount
         )
@@ -86,7 +108,7 @@ class MonthSelect(ui.Select):
         await interaction.response.edit_message(content=msg, view=view)
 
 
-class MonthView(ui.View):
+class MonthView(TimeoutView):
     def __init__(self, ctx: PayContext, months: list[str]):
         super().__init__()
         self.add_item(MonthSelect(ctx, months))
@@ -119,7 +141,7 @@ class MemberSelect(ui.Select):
         await interaction.response.edit_message(content="اختر الشهر:", view=view)
 
 
-class PayView(ui.View):
+class PayView(TimeoutView):
     def __init__(self, ctx: PayContext):
         super().__init__()
         self.add_item(MemberSelect(ctx))

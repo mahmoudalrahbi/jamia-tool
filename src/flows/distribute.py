@@ -3,6 +3,7 @@ from discord import ui
 from dataclasses import dataclass
 from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
+from src.flows.components import TimeoutView
 
 DISTRIBUTION_METHODS = ["حجز", "قرعة"]
 
@@ -39,7 +40,7 @@ class MethodSelect(ui.Select):
         await interaction.response.edit_message(content=msg, view=None)
 
 
-class MethodView(ui.View):
+class MethodView(TimeoutView):
     def __init__(self, ctx: DistributeContext):
         super().__init__()
         self.add_item(MethodSelect(ctx))
@@ -80,7 +81,7 @@ class MemberSelect(ui.Select):
         await interaction.response.send_modal(modal)
 
 
-class DistributeView(ui.View):
+class DistributeView(TimeoutView):
     def __init__(self, ctx: DistributeContext):
         super().__init__()
         self.add_item(MemberSelect(ctx))

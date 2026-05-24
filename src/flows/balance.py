@@ -1,6 +1,7 @@
 import discord
 from discord import ui
 from src.member_registry import MemberRegistry
+from src.flows.components import TimeoutView
 
 
 def build_balance_reply(member_name: str, registry: MemberRegistry) -> str:
@@ -22,7 +23,7 @@ class MemberSelect(ui.Select):
         await interaction.response.edit_message(content=reply, view=None)
 
 
-class BalanceView(ui.View):
+class BalanceView(TimeoutView):
     def __init__(self, registry: MemberRegistry):
         super().__init__()
         self.add_item(MemberSelect(registry))

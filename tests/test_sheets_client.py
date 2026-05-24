@@ -232,3 +232,32 @@ def test_get_balance_returns_total_paid(mock_creds, mock_gspread):
     balance = client.get_balance("خالد")
 
     assert balance == 560
+
+
+@patch("src.sheets_client.gspread")
+@patch("src.sheets_client.Credentials")
+def test_cache_reads_sheet_only_once_per_session(mock_creds, mock_gspread):
+    spreadsheet, members_sheet, _, _ = make_mock_spreadsheet(members_rows=MEMBERS_DATA)
+    mock_gspread.authorize.return_value.open_by_key.return_value = spreadsheet
+
+    client = SheetsClient(sheet_id="fake-id", credentials_path="fake.json")
+    client.get_members()
+    client.get_members()
+
+    members_sheet.get_all_values.assert_called_once()
+
+
+@patch("src.sheets_client.gspread")
+@patch("src.sheets_client.Credentials")
+def test_cache_is_invalidated_after_write_payment(mock_creds, mock_gspread):
+    spreadsheet, _, payments_sheet, _ = make_mock_spreadsheet(
+        members_rows=MEMBERS_DATA, payments_rows=PAYMENTS_DATA
+    )
+    mock_gspread.authorize.return_value.open_by_key.return_value = spreadsheet
+
+    client = SheetsClient(sheet_id="fake-id", credentials_path="fake.json")
+    client.get_unpaid_months("محمود")  # populates cache
+    client.write_payment(member="محمود", month="05/2025", date="21/05/2025", amount=20)
+    client.get_unpaid_months("محمود")  # should re-fetch
+
+    assert payments_sheet.get_all_values.call_count == 2

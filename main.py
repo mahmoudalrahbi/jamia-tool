@@ -8,6 +8,8 @@ from src.flows.balance import start_balance
 from src.flows.pay import start_pay
 from src.flows.distribute import start_distribute
 from src.flows.edit import start_edit
+from src.flows.summary import start_summary
+from src.command_error import handle_command_error
 
 load_dotenv()
 
@@ -31,22 +33,27 @@ async def on_ready():
 
 @tree.command(name="balance", description="استعلم عن رصيد عضو")
 async def balance(interaction: discord.Interaction):
-    await start_balance(interaction, registry)
+    await handle_command_error(interaction, start_balance(interaction, registry))
 
 
 @tree.command(name="pay", description="سجّل دفعة لعضو")
 async def pay(interaction: discord.Interaction):
-    await start_pay(interaction, registry, sheets)
+    await handle_command_error(interaction, start_pay(interaction, registry, sheets))
 
 
 @tree.command(name="distribute", description="سجّل توزيع الجمعية")
 async def distribute(interaction: discord.Interaction):
-    await start_distribute(interaction, registry, sheets)
+    await handle_command_error(interaction, start_distribute(interaction, registry, sheets))
 
 
 @tree.command(name="edit", description="عدّل دفعة أو توزيع")
 async def edit(interaction: discord.Interaction):
-    await start_edit(interaction, registry, sheets)
+    await handle_command_error(interaction, start_edit(interaction, registry, sheets))
+
+
+@tree.command(name="summary", description="ملخص الجمعية")
+async def summary(interaction: discord.Interaction):
+    await handle_command_error(interaction, start_summary(interaction, registry, sheets))
 
 
 bot.run(TOKEN)

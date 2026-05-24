@@ -4,7 +4,7 @@ from src.flows.edit import (
     EditPaymentContext, EditDistributionContext,
     EditPaymentMemberSelect, EditPaymentMonthView,
     EditDistributionMonthSelect, EditDistributionModal,
-    EditPaymentAmountModal,
+    EditPaymentAmountModal, EditPaymentMethodSelect,
 )
 
 
@@ -99,3 +99,46 @@ async def test_edit_payment_member_select_shows_month_picker_when_member_has_pai
     kwargs = interaction.response.edit_message.call_args.kwargs
     assert kwargs["content"] == "اختر الشهر:"
     assert isinstance(kwargs["view"], EditPaymentMonthView)
+
+
+@pytest.mark.asyncio
+async def test_edit_payment_amount_modal_shows_method_select_after_submit():
+    client = MagicMock()
+    registry = MagicMock()
+    registry.all.return_value = [{"name": "محمود"}]
+    registry.get_paid_months.return_value = ["04/2025"]
+    ctx = EditPaymentContext(client=client, registry=registry,
+                             member_name="محمود", month="04/2025", current_amount=20)
+    modal = EditPaymentAmountModal(ctx)
+    modal.amount_input._value = "25"
+
+    interaction = MagicMock()
+    interaction.response.edit_message = AsyncMock()
+
+    await modal.on_submit(interaction)
+
+    kwargs = interaction.response.edit_message.call_args.kwargs
+    assert "طريقة" in kwargs["content"] or "اختر" in kwargs["content"]
+    assert any(isinstance(item, EditPaymentMethodSelect) for item in kwargs["view"].children)
+
+
+@pytest.mark.asyncio
+async def test_edit_payment_method_select_writes_payment_with_chosen_method():
+    client = MagicMock()
+    client.write_payment = MagicMock()
+    ctx = EditPaymentContext(
+        client=client, registry=MagicMock(),
+        member_name="محمود", month="04/2025", current_amount=25,
+        current_date="21/04/2025", new_amount=25,
+    )
+    select = EditPaymentMethodSelect(ctx)
+    select._values = ["كاش"]
+
+    interaction = MagicMock()
+    interaction.response.edit_message = AsyncMock()
+
+    await select.callback(interaction)
+
+    client.write_payment.assert_called_once_with(
+        member="محمود", month="04/2025", date="21/04/2025", amount=25, transfer_type="كاش"
+    )
