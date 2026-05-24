@@ -52,7 +52,7 @@ class SheetsClient:
 
         members = []
         for row in rows[1:]:
-            name = row[headers[COL_NAME]]
+            name = row[headers[COL_NAME]].strip()
             if not name or name == TOTALS_ROW_NAME:
                 continue
             members.append({
@@ -69,7 +69,7 @@ class SheetsClient:
         h = self._header_map(rows)
 
         for i, row in enumerate(rows[1:], start=2):
-            if row[h[PAY_COL_MEMBER]] == member and row[h[PAY_COL_MONTH]] == month:
+            if row[h[PAY_COL_MEMBER]].strip() == member and row[h[PAY_COL_MONTH]] == month:
                 ac = self._col_label(h[PAY_COL_AMOUNT])
                 tc = self._col_label(h[PAY_COL_TYPE])
                 dc = self._col_label(h[PAY_COL_DATE])
@@ -87,7 +87,7 @@ class SheetsClient:
         h = self._header_map(rows)
 
         for row in rows[1:]:
-            if row[h[PAY_COL_MEMBER]] == member and row[h[PAY_COL_MONTH]] == month:
+            if row[h[PAY_COL_MEMBER]].strip() == member and row[h[PAY_COL_MONTH]] == month:
                 return {
                     "amount": int(row[h[PAY_COL_AMOUNT]]),
                     "date": row[h[PAY_COL_DATE]],
@@ -102,7 +102,7 @@ class SheetsClient:
         return [
             row[h[PAY_COL_MONTH]]
             for row in rows[1:]
-            if row[h[PAY_COL_MEMBER]] == member and row[h[PAY_COL_AMOUNT]]
+            if row[h[PAY_COL_MEMBER]].strip() == member and row[h[PAY_COL_AMOUNT]]
         ]
 
     def get_unpaid_months(self, member: str) -> list[str]:
@@ -113,7 +113,7 @@ class SheetsClient:
         return [
             row[h[PAY_COL_MONTH]]
             for row in rows[1:]
-            if row[h[PAY_COL_MEMBER]] == member and not row[h[PAY_COL_AMOUNT]]
+            if row[h[PAY_COL_MEMBER]].strip() == member and not row[h[PAY_COL_AMOUNT]]
         ]
 
     def get_distributed_months(self) -> list[dict]:
@@ -123,11 +123,11 @@ class SheetsClient:
 
         results = []
         for i, row in enumerate(rows[1:], start=2):
-            if row[h[DIST_COL_MEMBER]]:
+            if row[h[DIST_COL_MEMBER]].strip():
                 results.append({
                     "month": row[h[DIST_COL_MONTH]],
                     "row": i,
-                    "member": row[h[DIST_COL_MEMBER]],
+                    "member": row[h[DIST_COL_MEMBER]].strip(),
                     "amount": int(row[h[DIST_COL_AMOUNT]]) if row[h[DIST_COL_AMOUNT]] else 0,
                 })
         return results
@@ -162,6 +162,6 @@ class SheetsClient:
         h = self._header_map(rows)
 
         for row in rows[1:]:
-            if row[h[COL_NAME]] == member:
+            if row[h[COL_NAME]].strip() == member:
                 return int(row[h[COL_TOTAL_PAID]])
         raise ValueError(f"العضو '{member}' غير موجود")
