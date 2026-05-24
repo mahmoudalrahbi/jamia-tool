@@ -6,6 +6,7 @@ from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
 from src.flows.balance import start_balance
 from src.flows.pay import start_pay
+from src.flows.distribute import start_distribute
 
 load_dotenv()
 
@@ -35,6 +36,11 @@ async def balance(interaction: discord.Interaction):
 @tree.command(name="pay", description="سجّل دفعة لعضو")
 async def pay(interaction: discord.Interaction):
     await start_pay(interaction, registry, sheets)
+
+
+@tree.command(name="distribute", description="سجّل توزيع الجمعية")
+async def distribute(interaction: discord.Interaction):
+    await start_distribute(interaction, registry, sheets)
 
 
 bot.run(TOKEN)

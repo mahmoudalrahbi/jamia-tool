@@ -19,6 +19,11 @@ PAY_COL_AMOUNT = "المبلغ المدفوع"
 PAY_COL_TYPE = "طريقة الدفع"
 PAY_COL_DATE = "تاريخ الدفع"
 
+DIST_COL_MONTH = "الشهر"
+DIST_COL_MEMBER = "المستفيد"
+DIST_COL_AMOUNT = "المبلغ المستلم"
+DIST_COL_METHOD = "طريقة التوزيع"
+
 
 class SheetsClient:
     def __init__(self, sheet_id: str, credentials_path: str):
@@ -74,6 +79,25 @@ class SheetsClient:
             for row in rows[1:]
             if row[h[PAY_COL_MEMBER]] == member and not row[h[PAY_COL_AMOUNT]]
         ]
+
+    def write_distribution(self, row: int, member: str, amount: int, method: str) -> None:
+        ws = self._worksheet(SHEET_DISTRIBUTIONS)
+        rows = ws.get_all_values()
+        h = self._header_map(rows)
+
+        ws.update_cell(row, h[DIST_COL_MEMBER] + 1, member)
+        ws.update_cell(row, h[DIST_COL_AMOUNT] + 1, amount)
+        ws.update_cell(row, h[DIST_COL_METHOD] + 1, method)
+
+    def get_next_distribution(self) -> dict:
+        ws = self._worksheet(SHEET_DISTRIBUTIONS)
+        rows = ws.get_all_values()
+        h = self._header_map(rows)
+
+        for i, row in enumerate(rows[1:], start=2):
+            if not row[h[DIST_COL_MEMBER]]:
+                return {"month": row[h[DIST_COL_MONTH]], "row": i}
+        raise ValueError("لا توجد شهور توزيع متاحة")
 
     def get_balance(self, member: str) -> int:
         ws = self._worksheet(SHEET_MEMBERS)

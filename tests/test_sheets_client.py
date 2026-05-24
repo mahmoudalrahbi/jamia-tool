@@ -49,6 +49,17 @@ PAYMENTS_DATA = [
     ["خالد",  "05/2025", "2", "",  "",        "",            "متأخر", "", "", "12"],
 ]
 
+DIST_HEADER = ["الشهر", "المستفيد", "تم الاستلام؟", "المبلغ المستلم", "طريقة التوزيع", "ملاحظات"]
+
+DIST_DATA = [
+    DIST_HEADER,
+    ["05/2025", "محمود", "TRUE", "440", "حجز", ""],
+    ["07/2025", "خالد",  "TRUE", "440", "حجز", ""],
+    ["09/2026", "أمي",   "",     "",    "حجز", ""],
+    ["11/2026", "",      "",     "",    "",     ""],
+    ["01/2027", "",      "",     "",    "",     ""],
+]
+
 
 @patch("src.sheets_client.gspread")
 @patch("src.sheets_client.Credentials")
@@ -114,6 +125,40 @@ def test_get_unpaid_months_returns_only_empty_amount_rows(mock_creds, mock_gspre
     months = client.get_unpaid_months("محمود")
 
     assert months == ["05/2025"]
+
+
+@patch("src.sheets_client.gspread")
+@patch("src.sheets_client.Credentials")
+def test_write_distribution_fills_correct_cells(mock_creds, mock_gspread):
+    spreadsheet, _, _, dist_sheet = make_mock_spreadsheet(
+        members_rows=MEMBERS_DATA,
+        dist_rows=DIST_DATA,
+    )
+    mock_gspread.authorize.return_value.open_by_key.return_value = spreadsheet
+
+    client = SheetsClient(sheet_id="fake-id", credentials_path="fake.json")
+    client.write_distribution(row=5, member="خالد", amount=440, method="حجز")
+
+    # DIST_HEADER = ["الشهر"(0), "المستفيد"(1), "تم الاستلام؟"(2), "المبلغ المستلم"(3), "طريقة التوزيع"(4), ...]
+    dist_sheet.update_cell.assert_any_call(5, 2, "خالد")   # المستفيد  → col B
+    dist_sheet.update_cell.assert_any_call(5, 4, 440)      # المبلغ    → col D
+    dist_sheet.update_cell.assert_any_call(5, 5, "حجز")   # الطريقة  → col E
+
+
+@patch("src.sheets_client.gspread")
+@patch("src.sheets_client.Credentials")
+def test_get_next_distribution_returns_first_row_with_empty_member(mock_creds, mock_gspread):
+    spreadsheet, _, _, _ = make_mock_spreadsheet(
+        members_rows=MEMBERS_DATA,
+        dist_rows=DIST_DATA,
+    )
+    mock_gspread.authorize.return_value.open_by_key.return_value = spreadsheet
+
+    client = SheetsClient(sheet_id="fake-id", credentials_path="fake.json")
+    result = client.get_next_distribution()
+
+    assert result["month"] == "11/2026"
+    assert result["row"] == 5  # row 5 in sheet (1-indexed, header=1)
 
 
 @patch("src.sheets_client.gspread")
