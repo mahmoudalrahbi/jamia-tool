@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
 from src.flows.balance import start_balance
+from src.flows.pay import start_pay
 
 load_dotenv()
 
@@ -29,6 +30,11 @@ async def on_ready():
 @tree.command(name="balance", description="استعلم عن رصيد عضو")
 async def balance(interaction: discord.Interaction):
     await start_balance(interaction, registry, sheets)
+
+
+@tree.command(name="pay", description="سجّل دفعة لعضو")
+async def pay(interaction: discord.Interaction):
+    await start_pay(interaction, registry, sheets)
 
 
 bot.run(TOKEN)

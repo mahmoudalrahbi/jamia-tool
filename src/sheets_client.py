@@ -64,6 +64,17 @@ class SheetsClient:
                 return
         raise ValueError(f"لم يُعثر على صف للعضو '{member}' في الشهر '{month}'")
 
+    def get_unpaid_months(self, member: str) -> list[str]:
+        ws = self._worksheet(SHEET_PAYMENTS)
+        rows = ws.get_all_values()
+        h = self._header_map(rows)
+
+        return [
+            row[h[PAY_COL_MONTH]]
+            for row in rows[1:]
+            if row[h[PAY_COL_MEMBER]] == member and not row[h[PAY_COL_AMOUNT]]
+        ]
+
     def get_balance(self, member: str) -> int:
         ws = self._worksheet(SHEET_MEMBERS)
         rows = ws.get_all_values()

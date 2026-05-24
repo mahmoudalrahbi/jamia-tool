@@ -103,6 +103,21 @@ def test_write_payment_fills_correct_row(mock_creds, mock_gspread):
 
 @patch("src.sheets_client.gspread")
 @patch("src.sheets_client.Credentials")
+def test_get_unpaid_months_returns_only_empty_amount_rows(mock_creds, mock_gspread):
+    spreadsheet, _, _, _ = make_mock_spreadsheet(
+        members_rows=MEMBERS_DATA,
+        payments_rows=PAYMENTS_DATA,
+    )
+    mock_gspread.authorize.return_value.open_by_key.return_value = spreadsheet
+
+    client = SheetsClient(sheet_id="fake-id", credentials_path="fake.json")
+    months = client.get_unpaid_months("محمود")
+
+    assert months == ["05/2025"]
+
+
+@patch("src.sheets_client.gspread")
+@patch("src.sheets_client.Credentials")
 def test_get_balance_returns_total_paid(mock_creds, mock_gspread):
     spreadsheet, _, _, _ = make_mock_spreadsheet(members_rows=MEMBERS_DATA)
     mock_gspread.authorize.return_value.open_by_key.return_value = spreadsheet
