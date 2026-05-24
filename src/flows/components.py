@@ -16,6 +16,7 @@ class ManualDateModal(ui.Modal, title="أدخل التاريخ"):
     def __init__(self, on_date: DateCallback):
         super().__init__()
         self._on_date = on_date
+        self.date_input.default = date.today().strftime("%d/%m/%Y")
 
     async def on_submit(self, interaction: discord.Interaction):
         await self._on_date(interaction, self.date_input.value)
