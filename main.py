@@ -21,8 +21,7 @@ intents = discord.Intents.default()
 bot = discord.Client(intents=intents)
 tree = app_commands.CommandTree(bot)
 
-sheets = SheetsClient(sheet_id=SHEET_ID, credentials_path=CREDENTIALS)
-registry = MemberRegistry(sheets)
+registry = MemberRegistry(SheetsClient(sheet_id=SHEET_ID, credentials_path=CREDENTIALS))
 
 
 @bot.event
@@ -38,22 +37,22 @@ async def balance(interaction: discord.Interaction):
 
 @tree.command(name="pay", description="سجّل دفعة لعضو")
 async def pay(interaction: discord.Interaction):
-    await handle_command_error(interaction, start_pay(interaction, registry, sheets))
+    await handle_command_error(interaction, start_pay(interaction, registry))
 
 
 @tree.command(name="distribute", description="سجّل توزيع الجمعية")
 async def distribute(interaction: discord.Interaction):
-    await handle_command_error(interaction, start_distribute(interaction, registry, sheets))
+    await handle_command_error(interaction, start_distribute(interaction, registry))
 
 
 @tree.command(name="edit", description="عدّل دفعة أو توزيع")
 async def edit(interaction: discord.Interaction):
-    await handle_command_error(interaction, start_edit(interaction, registry, sheets))
+    await handle_command_error(interaction, start_edit(interaction, registry))
 
 
 @tree.command(name="summary", description="ملخص الجمعية")
 async def summary(interaction: discord.Interaction):
-    await handle_command_error(interaction, start_summary(interaction, registry, sheets))
+    await handle_command_error(interaction, start_summary(interaction, registry))
 
 
 bot.run(TOKEN)

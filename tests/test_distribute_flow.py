@@ -11,10 +11,9 @@ def test_distribute_confirmation_includes_month_member_and_amount():
 
 
 def make_distribute_context():
-    client = MagicMock()
     registry = MagicMock()
     registry.all.return_value = [{"name": "خالد"}]
-    return DistributeContext(client=client, registry=registry, dist_row=4, month="11/2026")
+    return DistributeContext(registry=registry, dist_row=4, month="11/2026")
 
 
 @pytest.mark.asyncio

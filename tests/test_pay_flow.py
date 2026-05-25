@@ -12,20 +12,20 @@ def test_pay_confirmation_includes_member_month_and_amount():
 
 @pytest.mark.asyncio
 async def test_execute_payment_calls_write_payment_with_correct_args():
-    client = MagicMock()
+    registry = MagicMock()
     interaction = MagicMock()
     interaction.response.edit_message = AsyncMock()
 
     await execute_payment(
         interaction=interaction,
-        client=client,
+        registry=registry,
         member_name="محمود",
         month="05/2025",
         date="21/05/2025",
         amount=20,
     )
 
-    client.write_payment.assert_called_once_with(
+    registry.write_payment.assert_called_once_with(
         member="محمود",
         month="05/2025",
         date="21/05/2025",
@@ -73,12 +73,11 @@ async def test_amount_modal_updates_confirmation_message_with_new_amount():
 
 
 def make_pay_context(unpaid_months=None, member=None):
-    client = MagicMock()
     registry = MagicMock()
     registry.all.return_value = [{"name": "محمود"}]
     registry.get.return_value = member or {"name": "محمود", "shares": 1, "monthly_amount": 20}
     registry.get_unpaid_months.return_value = unpaid_months if unpaid_months is not None else ["05/2025"]
-    return PayContext(client=client, registry=registry)
+    return PayContext(registry=registry)
 
 
 @pytest.mark.asyncio
@@ -138,7 +137,7 @@ async def test_confirm_view_shows_duplicate_warning_when_month_already_paid():
     ctx.member_name = "محمود"
     ctx.month = "04/2025"
     ctx.amount = 20
-    ctx.client.get_paid_months.return_value = ["04/2025"]
+    ctx.registry.get_paid_months.return_value = ["04/2025"]
 
     view = ConfirmView(ctx)
     interaction = MagicMock()
@@ -157,7 +156,7 @@ async def test_confirm_view_proceeds_directly_when_month_not_yet_paid():
     ctx.member_name = "محمود"
     ctx.month = "05/2025"
     ctx.amount = 20
-    ctx.client.get_paid_months.return_value = []
+    ctx.registry.get_paid_months.return_value = []
 
     view = ConfirmView(ctx)
     interaction = MagicMock()

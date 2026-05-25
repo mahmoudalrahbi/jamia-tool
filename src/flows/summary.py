@@ -1,13 +1,12 @@
 import discord
-from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
 
 
-def build_summary_message(registry: MemberRegistry, client: SheetsClient) -> str:
+def build_summary_message(registry: MemberRegistry) -> str:
     members = registry.all()
 
     total_collected = sum(registry.get_balance(m["name"]) for m in members)
-    dist_months = client.get_distributed_months()
+    dist_months = registry.get_distributed_months()
     total_distributed = sum(d["amount"] for d in dist_months)
     remaining = total_collected - total_distributed
 
@@ -28,7 +27,6 @@ def build_summary_message(registry: MemberRegistry, client: SheetsClient) -> str
     return "\n".join(lines)
 
 
-async def start_summary(interaction: discord.Interaction,
-                        registry: MemberRegistry, client: SheetsClient):
-    msg = build_summary_message(registry, client)
+async def start_summary(interaction: discord.Interaction, registry: MemberRegistry):
+    msg = build_summary_message(registry)
     await interaction.response.send_message(msg, ephemeral=True)

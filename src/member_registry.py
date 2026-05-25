@@ -24,3 +24,20 @@ class MemberRegistry:
 
     def get_balance(self, member_name: str) -> int:
         return self._client.get_balance(member_name)
+
+    def get_payment(self, member_name: str, month: str) -> dict:
+        return self._client.get_payment(member_name, month)
+
+    def get_next_distribution(self) -> dict:
+        return self._client.get_next_distribution()
+
+    def get_distributed_months(self) -> list[dict]:
+        return self._client.get_distributed_months()
+
+    def write_payment(self, member: str, month: str, date: str,
+                      amount: int, transfer_type: str = "تحويل") -> None:
+        self._client.write_payment(member=member, month=month, date=date,
+                                   amount=amount, transfer_type=transfer_type)
+
+    def write_distribution(self, row: int, member: str, amount: int, method: str = "") -> None:
+        self._client.write_distribution(row=row, member=member, amount=amount, method=method)

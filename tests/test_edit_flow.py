@@ -10,9 +10,9 @@ from src.flows.edit import (
 
 @pytest.mark.asyncio
 async def test_edit_distribution_month_select_opens_modal_with_prefilled_values():
-    client = MagicMock()
+    registry = MagicMock()
     dist_months = [{"month": "05/2025", "row": 2, "member": "محمود", "amount": 440, "method": "حجز"}]
-    ctx = EditDistributionContext(client=client)
+    ctx = EditDistributionContext(registry=registry)
     select = EditDistributionMonthSelect(ctx, dist_months=dist_months)
     select._values = ["05/2025"]
 
@@ -33,10 +33,9 @@ async def test_edit_distribution_month_select_opens_modal_with_prefilled_values(
 
 @pytest.mark.asyncio
 async def test_edit_distribution_modal_preserves_method_on_submit():
-    client = MagicMock()
-    client.write_distribution = MagicMock()
+    registry = MagicMock()
     ctx = EditDistributionContext(
-        client=client, dist_row=3, month="05/2025",
+        registry=registry, dist_row=3, month="05/2025",
         current_member="محمود", current_amount=440, current_method="حجز",
     )
     modal = EditDistributionModal(ctx)
@@ -48,25 +47,24 @@ async def test_edit_distribution_modal_preserves_method_on_submit():
 
     await modal.on_submit(interaction)
 
-    client.write_distribution.assert_called_once_with(
+    registry.write_distribution.assert_called_once_with(
         row=3, member="محمود", amount=440, method="حجز"
     )
 
 
 @pytest.mark.asyncio
 async def test_edit_distribution_modal_shows_zero_amount_as_string():
-    client = MagicMock()
-    ctx = EditDistributionContext(client=client, current_amount=0)
+    registry = MagicMock()
+    ctx = EditDistributionContext(registry=registry, current_amount=0)
     modal = EditDistributionModal(ctx)
     assert modal.amount_input.default == "0"
 
 
 def make_payment_ctx(paid_months=None):
-    client = MagicMock()
     registry = MagicMock()
     registry.all.return_value = [{"name": "محمود"}]
     registry.get_paid_months.return_value = paid_months if paid_months is not None else ["04/2025"]
-    return EditPaymentContext(client=client, registry=registry)
+    return EditPaymentContext(registry=registry)
 
 
 @pytest.mark.asyncio
@@ -103,11 +101,10 @@ async def test_edit_payment_member_select_shows_month_picker_when_member_has_pai
 
 @pytest.mark.asyncio
 async def test_edit_payment_amount_modal_shows_method_select_after_submit():
-    client = MagicMock()
     registry = MagicMock()
     registry.all.return_value = [{"name": "محمود"}]
     registry.get_paid_months.return_value = ["04/2025"]
-    ctx = EditPaymentContext(client=client, registry=registry,
+    ctx = EditPaymentContext(registry=registry,
                              member_name="محمود", month="04/2025", current_amount=20)
     modal = EditPaymentAmountModal(ctx)
     modal.amount_input._value = "25"
@@ -124,10 +121,9 @@ async def test_edit_payment_amount_modal_shows_method_select_after_submit():
 
 @pytest.mark.asyncio
 async def test_edit_payment_method_select_writes_payment_with_chosen_method():
-    client = MagicMock()
-    client.write_payment = MagicMock()
+    registry = MagicMock()
     ctx = EditPaymentContext(
-        client=client, registry=MagicMock(),
+        registry=registry,
         member_name="محمود", month="04/2025", current_amount=25,
         current_date="21/04/2025", new_amount=25,
     )
@@ -139,6 +135,6 @@ async def test_edit_payment_method_select_writes_payment_with_chosen_method():
 
     await select.callback(interaction)
 
-    client.write_payment.assert_called_once_with(
+    registry.write_payment.assert_called_once_with(
         member="محمود", month="04/2025", date="21/04/2025", amount=25, transfer_type="كاش"
     )

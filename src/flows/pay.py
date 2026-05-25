@@ -1,14 +1,12 @@
 import discord
 from discord import ui
 from dataclasses import dataclass, field
-from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
 from src.flows.components import DatePickerView, TimeoutView
 
 
 @dataclass
 class PayContext:
-    client: SheetsClient
     registry: MemberRegistry
     member_name: str = ""
     month: str = ""
@@ -19,17 +17,17 @@ def build_pay_confirmation(member_name: str, month: str, amount: int) -> str:
     return f"تسجيل دفعة لـ **{member_name}** — الشهر: **{month}** — المبلغ: **{amount} ريال**"
 
 
-async def execute_payment(interaction: discord.Interaction, client: SheetsClient,
+async def execute_payment(interaction: discord.Interaction, registry: MemberRegistry,
                           member_name: str, month: str, date: str, amount: int) -> None:
-    client.write_payment(member=member_name, month=month, date=date, amount=amount)
+    registry.write_payment(member=member_name, month=month, date=date, amount=amount)
     msg = f"✅ تم تسجيل دفعة **{member_name}** — {month} — {amount} ريال"
     await interaction.response.edit_message(content=msg, view=None)
 
 
-def _make_date_picker(client: SheetsClient, member_name: str,
+def _make_date_picker(registry: MemberRegistry, member_name: str,
                       month: str, amount: int) -> DatePickerView:
     async def on_date(interaction: discord.Interaction, date: str):
-        await execute_payment(interaction, client, member_name, month, date, amount)
+        await execute_payment(interaction, registry, member_name, month, date, amount)
     return DatePickerView(on_date)
 
 
@@ -64,7 +62,7 @@ class DuplicatePaymentView(TimeoutView):
     @ui.button(label="نعم، استبدل", style=discord.ButtonStyle.danger)
     async def overwrite(self, interaction: discord.Interaction, button: ui.Button):
         view = _make_date_picker(
-            self._ctx.client, self._ctx.member_name, self._ctx.month, self._ctx.amount
+            self._ctx.registry, self._ctx.member_name, self._ctx.month, self._ctx.amount
         )
         await interaction.response.edit_message(content="اختر تاريخ الدفع:", view=view)
 
@@ -80,13 +78,13 @@ class ConfirmView(TimeoutView):
 
     @ui.button(label="تأكيد", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: ui.Button):
-        paid = self._ctx.client.get_paid_months(self._ctx.member_name)
+        paid = self._ctx.registry.get_paid_months(self._ctx.member_name)
         if self._ctx.month in paid:
             msg = f"هذه الدفعة مسجلة مسبقاً لـ **{self._ctx.member_name}** — {self._ctx.month}. هل تريد استبدالها؟"
             await interaction.response.edit_message(content=msg, view=DuplicatePaymentView(self._ctx))
             return
         view = _make_date_picker(
-            self._ctx.client, self._ctx.member_name, self._ctx.month, self._ctx.amount
+            self._ctx.registry, self._ctx.member_name, self._ctx.month, self._ctx.amount
         )
         await interaction.response.edit_message(content="اختر تاريخ الدفع:", view=view)
 
@@ -147,8 +145,7 @@ class PayView(TimeoutView):
         self.add_item(MemberSelect(ctx))
 
 
-async def start_pay(interaction: discord.Interaction,
-                    registry: MemberRegistry, client: SheetsClient):
-    ctx = PayContext(client=client, registry=registry)
+async def start_pay(interaction: discord.Interaction, registry: MemberRegistry):
+    ctx = PayContext(registry=registry)
     view = PayView(ctx)
     await interaction.response.send_message("اختر العضو:", view=view, ephemeral=True)

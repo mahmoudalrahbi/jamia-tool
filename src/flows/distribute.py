@@ -1,7 +1,6 @@
 import discord
 from discord import ui
 from dataclasses import dataclass
-from src.sheets_client import SheetsClient
 from src.member_registry import MemberRegistry
 from src.flows.components import TimeoutView
 
@@ -10,7 +9,6 @@ DISTRIBUTION_METHODS = ["حجز", "قرعة"]
 
 @dataclass
 class DistributeContext:
-    client: SheetsClient
     registry: MemberRegistry
     dist_row: int = 0
     month: str = ""
@@ -30,7 +28,7 @@ class MethodSelect(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         method = self.values[0]
-        self._ctx.client.write_distribution(
+        self._ctx.registry.write_distribution(
             row=self._ctx.dist_row,
             member=self._ctx.member_name,
             amount=self._ctx.amount,
@@ -87,11 +85,9 @@ class DistributeView(TimeoutView):
         self.add_item(MemberSelect(ctx))
 
 
-async def start_distribute(interaction: discord.Interaction,
-                           registry: MemberRegistry, client: SheetsClient):
-    dist = client.get_next_distribution()
-    ctx = DistributeContext(client=client, registry=registry,
-                            dist_row=dist["row"], month=dist["month"])
+async def start_distribute(interaction: discord.Interaction, registry: MemberRegistry):
+    dist = registry.get_next_distribution()
+    ctx = DistributeContext(registry=registry, dist_row=dist["row"], month=dist["month"])
     view = DistributeView(ctx)
     await interaction.response.send_message(
         f"الشهر القادم للتوزيع: **{dist['month']}**\nاختر المستفيد:",
